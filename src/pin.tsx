@@ -1,6 +1,6 @@
 import { LocalStorage } from "@raycast/api";
 import { useState, useEffect } from "react";
-import { Pollenflug } from "./pollenflug-anzeigen";
+import { Pollenflug } from "./types";
 
 export async function handlePin(pollenName: string) {
   console.log("toggle pin:", pollenName);
@@ -21,13 +21,13 @@ export async function handlePin(pollenName: string) {
 
   return pollen.pinned;
 }
+
 export async function getPinned() {
   const pollenResponse = (await LocalStorage.getItem<string>("pollen")) || { pinned: [] };
-
   const pollen = typeof pollenResponse === "string" ? JSON.parse(pollenResponse) : pollenResponse;
-
   return pollen.pinned;
 }
+
 export function usePinned(pollenflug?: Pollenflug) {
   const [pinned, setPinned] = useState<string[]>([]);
 
