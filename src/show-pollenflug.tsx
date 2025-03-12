@@ -8,22 +8,22 @@ import { Day, DayDict, Location, Pollenflug, PollenflugApiData, PollenflugItem }
 function getPollenDisplay(value: string): { color: Color; value: string } {
   switch (value) {
     case "0":
-      return { color: Color.Green, value: "Keine Belastung" };
+      return { color: Color.Green, value: "Keine" };
     case "0-1":
-      return { color: Color.Yellow, value: "Keine bis geringe Belastung" };
+      return { color: Color.Green, value: "Sehr niedrig" };
     case "1":
-      return { color: Color.Yellow, value: "Geringe Belastung" };
+      return { color: Color.Yellow, value: "Niedrig" };
     case "1-2":
-      return { color: Color.Orange, value: "Geringe bis mittlere Belastung" };
+      return { color: Color.Orange, value: "Mäßig" };
     case "2":
-      return { color: Color.Orange, value: "Mittlere Belastung" };
+      return { color: Color.Red, value: "Hoch" };
     case "2-3":
-      return { color: Color.Red, value: "Mittlere bis hohe Belastung" };
+      return { color: Color.Red, value: "Sehr Hoch" };
     case "3":
-      return { color: Color.Red, value: "Hohe Belastung" };
+      return { color: Color.Magenta, value: "Maximal" };
     default:
       console.log("Unknown value:", value);
-      return { color: Color.Magenta, value: "Unbekannter Wert" };
+      return { color: Color.SecondaryText, value: "Unknown Value" };
   }
 }
 
@@ -132,13 +132,27 @@ export default function Command() {
       {hasPinned && (
         <List.Section title="Pinned">
           {pinnedItems.map((item) => (
-            <PollenflugListItem key={item.name} item={item} day={day} setPinned={setPinned} actions={actions} />
+            <PollenflugListItem
+              key={item.name}
+              item={item}
+              day={day}
+              isPinned={true}
+              setPinned={setPinned}
+              actions={actions}
+            />
           ))}
         </List.Section>
       )}
       <List.Section title={hasPinned ? "Other" : undefined}>
         {unpinnedItems.map((item) => (
-          <PollenflugListItem key={item.name} item={item} day={day} setPinned={setPinned} actions={actions} />
+          <PollenflugListItem
+            key={item.name}
+            item={item}
+            day={day}
+            isPinned={false}
+            setPinned={setPinned}
+            actions={actions}
+          />
         ))}
       </List.Section>
     </List>
@@ -148,11 +162,13 @@ export default function Command() {
 function PollenflugListItem({
   item,
   day,
+  isPinned,
   setPinned,
   actions,
 }: {
   item: PollenflugItem;
   day: Day;
+  isPinned: boolean;
   setPinned: (pinned: string[]) => void;
   actions: JSX.Element;
 }) {
@@ -164,7 +180,7 @@ function PollenflugListItem({
       actions={
         <ActionPanel>
           <Action
-            title={`Pin ${item.name}`}
+            title={`${isPinned ? "Unpin" : "Pin"} ${item.name}`}
             icon={Icon.Pin}
             onAction={() => handlePin(item.name).then((pinned) => setPinned(pinned))}
           />
