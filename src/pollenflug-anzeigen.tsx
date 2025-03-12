@@ -1,24 +1,24 @@
-import { Action, ActionPanel, Color, Icon, List } from "@raycast/api";
-import { useFetch } from "@raycast/utils";
-import { useState } from "react";
-import { handlePin, usePinned } from "./pin";
+import { Action, ActionPanel, Color, Icon, List, LocalStorage, showToast, Toast } from "@raycast/api";
+import { useCachedState, usePromise } from "@raycast/utils";
+import fetch from "node-fetch";
 import { getLocation, locations } from "./locations";
-import { Location, PollenflugApiData, Pollenflug, Day, DayDict, PollenflugItem } from "./types";
+import { handlePin, usePinned } from "./pin";
+import { Day, DayDict, Location, Pollenflug, PollenflugApiData, PollenflugItem } from "./types";
 
 function getPollenDisplay(value: string): { color: Color; value: string } {
   switch (value) {
     case "0":
       return { color: Color.Green, value: "Keine Belastung" };
     case "0-1":
-      return { color: Color.Green, value: "Keine bis geringe Belastung" };
+      return { color: Color.Yellow, value: "Keine bis geringe Belastung" };
     case "1":
       return { color: Color.Yellow, value: "Geringe Belastung" };
     case "1-2":
-      return { color: Color.Yellow, value: "Geringe bis mittlere Belastung" };
+      return { color: Color.Orange, value: "Geringe bis mittlere Belastung" };
     case "2":
       return { color: Color.Orange, value: "Mittlere Belastung" };
     case "2-3":
-      return { color: Color.Orange, value: "Mittlere bis hohe Belastung" };
+      return { color: Color.Red, value: "Mittlere bis hohe Belastung" };
     case "3":
       return { color: Color.Red, value: "Hohe Belastung" };
     default:
@@ -27,59 +27,100 @@ function getPollenDisplay(value: string): { color: Color; value: string } {
   }
 }
 
-function usePollenflugApi() {
-  // TODO implement caching until next_update
-  return useFetch<PollenflugApiData>(`https://opendata.dwd.de/climate_environment/health/alerts/s31fg.json`);
+async function fetchPollenflugData(): Promise<PollenflugApiData | null> {
+  const response = await fetch("https://opendata.dwd.de/climate_environment/health/alerts/s31fg.json");
+  const result: PollenflugApiData = (await response.json()) as PollenflugApiData;
+  LocalStorage.setItem("pollenflug_data", JSON.stringify(result));
+  LocalStorage.setItem("pollenflug_data_last_update", new Date().toISOString());
+  return result;
 }
 
-function usePollenflug(location: Location): { pollenflug?: Pollenflug; isLoading: boolean } {
-  const { data, isLoading } = usePollenflugApi();
+function usePollenflug(location: Location): {
+  pollenflug?: Pollenflug;
+  isLoading: boolean;
+  revalidate: () => Promise<PollenflugApiData | null>;
+} {
+  const { data, isLoading, revalidate } = usePromise(async () => {
+    const cached = await LocalStorage.getItem("pollenflug_data").then((value) =>
+      value ? (JSON.parse(value?.toString()) as PollenflugApiData) : null,
+    );
+    const lastUpdate = await LocalStorage.getItem("pollenflug_data_last_update").then((value) =>
+      value ? new Date(value?.toString()) : null,
+    );
+    const nextUpdate = cached ? new Date(cached.next_update.replace(" Uhr", "")) : null;
 
-  if (!data) {
-    return { pollenflug: undefined, isLoading };
-  }
+    if (cached && lastUpdate && nextUpdate && new Date() < nextUpdate) {
+      showToast({
+        style: Toast.Style.Success,
+        title: "Loaded from cache",
+        message: `Next update: ${nextUpdate.toLocaleString()}`,
+      });
+      return cached;
+    } else {
+      showToast({
+        style: Toast.Style.Animated,
+        title: "Fetching data",
+      });
+      const result = await fetchPollenflugData();
+      showToast({
+        style: Toast.Style.Success,
+        title: "Data fetched",
+      });
+      return result;
+    }
+  }, []);
 
-  const content = data.content.find((item) => item.partregion_id === location.partregion_id);
+  const content = data?.content.find((item) => item.partregion_id === location.partregion_id);
   if (!content) {
-    return { pollenflug: undefined, isLoading };
+    return { pollenflug: undefined, isLoading, revalidate };
   }
 
   // include key in the object
   const pollen = Object.entries(content.Pollen).map(([name, values]) => ({ name, ...values }));
 
-  return { pollenflug: { location, pollen }, isLoading };
+  return { pollenflug: { location, pollen }, isLoading, revalidate };
 }
 
 export default function Command() {
-  const [location, setLocation] = useState<Location>(locations[0]);
+  const [location, setLocation] = useCachedState<Location>("location", locations[0]);
 
-  const [day, setDay] = useState<Day>("today");
+  const [day, setDay] = useCachedState<Day>("day", "today");
 
-  const { pollenflug, isLoading } = usePollenflug(location);
+  const { pollenflug, isLoading, revalidate } = usePollenflug(location);
 
   const { pinnedItems, unpinnedItems, hasPinned, setPinned } = usePinned(pollenflug);
 
-  const daysSection = (
-    <ActionPanel.Section title="Day">
-      <Action
-        title={DayDict["today"]}
-        icon={Icon.Sun}
-        shortcut={{ modifiers: ["cmd"], key: "1" }}
-        onAction={() => setDay("today")}
-      />
-      <Action
-        title={DayDict["tomorrow"]}
-        icon={Icon.Sun}
-        shortcut={{ modifiers: ["cmd"], key: "2" }}
-        onAction={() => setDay("tomorrow")}
-      />
-      <Action
-        title={DayDict["dayafter_to"]}
-        icon={Icon.Sun}
-        shortcut={{ modifiers: ["cmd"], key: "3" }}
-        onAction={() => setDay("dayafter_to")}
-      />
-    </ActionPanel.Section>
+  const actions = (
+    <>
+      <ActionPanel.Section title="Day">
+        <Action
+          title={DayDict["today"]}
+          icon={Icon.Sun}
+          shortcut={{ modifiers: ["cmd"], key: "1" }}
+          onAction={() => setDay("today")}
+        />
+        <Action
+          title={DayDict["tomorrow"]}
+          icon={Icon.Sun}
+          shortcut={{ modifiers: ["cmd"], key: "2" }}
+          onAction={() => setDay("tomorrow")}
+        />
+        <Action
+          title={DayDict["dayafter_to"]}
+          icon={Icon.Sun}
+          shortcut={{ modifiers: ["cmd"], key: "3" }}
+          onAction={() => setDay("dayafter_to")}
+        />
+      </ActionPanel.Section>
+      <ActionPanel.Section>
+        <Action
+          title={`Revalidate`}
+          icon={Icon.ArrowClockwise}
+          onAction={() => revalidate()}
+          shortcut={{ modifiers: ["cmd"], key: "r" }}
+        />
+      </ActionPanel.Section>
+    </>
   );
 
   return (
@@ -91,13 +132,13 @@ export default function Command() {
       {hasPinned && (
         <List.Section title="Pinned">
           {pinnedItems.map((item) => (
-            <PollenflugListItem key={item.name} item={item} day={day} setPinned={setPinned} daysSection={daysSection} />
+            <PollenflugListItem key={item.name} item={item} day={day} setPinned={setPinned} actions={actions} />
           ))}
         </List.Section>
       )}
       <List.Section title={hasPinned ? "Other" : undefined}>
         {unpinnedItems.map((item) => (
-          <PollenflugListItem key={item.name} item={item} day={day} setPinned={setPinned} daysSection={daysSection} />
+          <PollenflugListItem key={item.name} item={item} day={day} setPinned={setPinned} actions={actions} />
         ))}
       </List.Section>
     </List>
@@ -108,12 +149,12 @@ function PollenflugListItem({
   item,
   day,
   setPinned,
-  daysSection,
+  actions,
 }: {
   item: PollenflugItem;
   day: Day;
   setPinned: (pinned: string[]) => void;
-  daysSection: JSX.Element;
+  actions: JSX.Element;
 }) {
   return (
     <List.Item
@@ -125,10 +166,9 @@ function PollenflugListItem({
           <Action
             title={`Pin ${item.name}`}
             icon={Icon.Pin}
-            shortcut={{ modifiers: ["cmd"], key: "u" }}
             onAction={() => handlePin(item.name).then((pinned) => setPinned(pinned))}
           />
-          {daysSection}
+          {actions}
         </ActionPanel>
       }
     />
@@ -140,9 +180,13 @@ function LocationDropdown({ onChange }: { onChange: (id: string) => void }) {
     <List.Dropdown tooltip="Select region" storeValue onChange={(newValue) => onChange(newValue)}>
       {locations.map((location) => (
         <List.Dropdown.Item
-          key={location.partregion_id}
+          key={`${location.region_id}+${location.partregion_id}`}
           value={`${location.region_id}:${location.partregion_id}`}
-          title={`${location.partregion_name} (${location.region_name})`}
+          title={
+            location.partregion_name.length > 0
+              ? location.partregion_name + ` (${location.region_name})`
+              : location.region_name
+          }
         />
       ))}
     </List.Dropdown>

@@ -1,10 +1,9 @@
 import { LocalStorage } from "@raycast/api";
-import { useState, useEffect } from "react";
+import { useCachedState } from "@raycast/utils";
+import { useEffect } from "react";
 import { Pollenflug } from "./types";
 
 export async function handlePin(pollenName: string) {
-  console.log("toggle pin:", pollenName);
-
   pollenName = pollenName.toLowerCase();
 
   const pollenResponse = (await LocalStorage.getItem<string>("pollen")) || { pinned: [] };
@@ -29,10 +28,10 @@ export async function getPinned() {
 }
 
 export function usePinned(pollenflug?: Pollenflug) {
-  const [pinned, setPinned] = useState<string[]>([]);
+  const [pinned, setPinned] = useCachedState<string[]>("pinned", []);
 
-  const [pinnedItems, setPinnedItems] = useState<Pollenflug["pollen"]>([]);
-  const [unpinnedItems, setUnpinnedItems] = useState<Pollenflug["pollen"]>([]);
+  const [pinnedItems, setPinnedItems] = useCachedState<Pollenflug["pollen"]>("pinned_items", []);
+  const [unpinnedItems, setUnpinnedItems] = useCachedState<Pollenflug["pollen"]>("unpinned_items", []);
 
   useEffect(() => {
     getPinned().then((pinned) => setPinned(pinned));

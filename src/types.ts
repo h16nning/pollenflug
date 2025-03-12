@@ -16,9 +16,9 @@ export type Pollenflug = {
 export type Day = "today" | "tomorrow" | "dayafter_to";
 
 export const DayDict: Record<Day, string> = {
-  today: "Heute",
-  tomorrow: "Morgen",
-  dayafter_to: "Übermorgen",
+  today: "Today",
+  tomorrow: "Tomorrow",
+  dayafter_to: "Day after tomorrow",
 };
 
 export type PollenflugItem = {

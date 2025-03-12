@@ -4,9 +4,10 @@
   "title": "Pollenflug",
   "description": "Deutscher Wetterdienst API",
   "icon": "extension_icon.png",
-  "author": "h16nning",
+  "author": "H16nning",
   "categories": [
-    "Data"
+    "Data",
+    "Other"
   ],
   "license": "MIT",
   "commands": [
@@ -19,7 +20,8 @@
   ],
   "dependencies": {
     "@raycast/api": "^1.89.1",
-    "@raycast/utils": "^1.17.0"
+    "@raycast/utils": "^1.17.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@raycast/eslint-config": "^1.0.11",
